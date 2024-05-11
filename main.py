@@ -38,6 +38,10 @@ class BeatStepImpro(ControlSurface):
             self.pads = []
 
             self.setup_inputs();
+            self.reset_knob_values_sysex();
+
+    ################################################################################
+    ## Control Inputs Setup
 
     def setup_inputs(self):
         self.setup_knobs();
@@ -48,8 +52,6 @@ class BeatStepImpro(ControlSurface):
         for midi_cc in range(self.knobs_offset_cc, self.steps_offset_cc + 16):
             element = EncoderElement(MIDI_CC_TYPE, self.midi_channel - 1, midi_cc, Live.MidiMap.MapMode.absolute)
             element.add_value_listener(self.on_knob_input_value, identify_sender = True)
-            element.pre_val = 0 # FIXME: read actual value from BSP
-            element.cur_val = 0 # FIXME: read actual value from BSP
             self.knobs.append(element)
 
     def setup_steps(self):
@@ -57,8 +59,6 @@ class BeatStepImpro(ControlSurface):
             element = ConfigurableButtonElement(True, MIDI_CC_TYPE, self.midi_channel - 1, midi_cc)
             element.set_on_off_values(self.led_on, self.led_off) # FIXME: this is currently not supported on BSP
             element.add_value_listener(self.on_step_input_value, identify_sender = True)
-            element.pre_val = 0 # FIXME: read actual value from BSP
-            element.cur_val = 0 # FIXME: read actual value from BSP
             self.steps.append(element)
 
     def setup_pads(self):
@@ -66,8 +66,6 @@ class BeatStepImpro(ControlSurface):
             element = ConfigurableButtonElement(True, MIDI_NOTE_TYPE, self.midi_channel - 1, midi_note)
             element.set_on_off_values(self.led_on, self.led_off) # FIXME: this is currently not supported on BSP
             element.add_value_listener(self.on_pad_input_value, identify_sender = True)
-            element.pre_val = 0 # FIXME: read actual value from BSP
-            element.cur_val = 0 # FIXME: read actual value from BSP
             self.pads.append(element)
 
     def on_knob_input_value(self, value: int, sender: EncoderElement):
@@ -78,6 +76,31 @@ class BeatStepImpro(ControlSurface):
 
     def on_pad_input_value(self, value: int, sender: ConfigurableButtonElement):
         self.log_message(f"got pad input {value}, sender {sender}")
+
+    ################################################################################
+    ## SysEx
+
+    def reset_knob_values_sysex(self):
+        for position in range(0, 16):
+            self.set_knob_value_sysex(position, 0)
+
+    def set_knob_value_sysex(self, position: int, value: int):
+        assert position >= 0 and position <= 15, "knob position must be between 0 and 15"
+        clamped_value = min(max(value, 0), 127)
+        sysex_message = bytes([0xf0, 0x00, 0x20, 0x6b, 0x7f, 0x42, 0x02, 0x00, 0x00, 0x20 + position, clamped_value, 0xf7])
+        self._send_midi(sysex_message)
+
+    def _send_sysex_and_wait(self, sysex_message: bytes, timeout: float = 1.0) -> bool:
+        response = None
+        self._send_midi(sysex_message)
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self._receive_midi(1) is not None:
+                return True
+        return False
+
+    ################################################################################
+    ## Release
 
     def disconnect(self):
         super(BeatStepImpro, self).disconnect()
