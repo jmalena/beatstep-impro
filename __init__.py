@@ -1,4 +1,4 @@
-from .BeatStepImpro import BeatStepImpro
+from .BeatStep_Impro import BeatStep_Impro
 
 def create_instance(c_instance):
-	return BeatStepImpro(c_instance)
+	return BeatStep_Impro(c_instance)
