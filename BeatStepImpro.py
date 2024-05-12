@@ -17,6 +17,12 @@ from _Framework.Util import find_if # type: ignore
 import collections
 from typing import List
 
+MIDI_CHANNEL = 16
+KNOBS_OFFSET_CC = 1
+STEPS_OFFSET_CC = 21
+PADS_OFFSET_NOTE = 36
+
+
 class BeatStepImpro(ControlSurface):
     knobs: List[EncoderElement]
     steps: List[ConfigurableButtonElement]
@@ -25,14 +31,6 @@ class BeatStepImpro(ControlSurface):
     def __init__(self, c_instance):
         super(BeatStepImpro, self).__init__(c_instance)
         with self.component_guard():
-            # TODO: move the config somewhere else
-            self.midi_channel = 16
-            self.knobs_offset_cc = 1;
-            self.steps_offset_cc = 21;
-            self.pads_offset_note = 36;
-            self.led_off = 0 # FIXME: this is currently not supported on BSP
-            self.led_on = 127 # FIXME: this is currently not supported on BSP
-
             self.knobs = []
             self.steps = []
             self.pads = []
@@ -49,22 +47,20 @@ class BeatStepImpro(ControlSurface):
         self.setup_pads();
 
     def setup_knobs(self):
-        for midi_cc in range(self.knobs_offset_cc, self.steps_offset_cc + 16):
-            element = EncoderElement(MIDI_CC_TYPE, self.midi_channel - 1, midi_cc, Live.MidiMap.MapMode.absolute)
+        for midi_cc in range(KNOBS_OFFSET_CC, KNOBS_OFFSET_CC + 16):
+            element = EncoderElement(MIDI_CC_TYPE, MIDI_CHANNEL - 1, midi_cc, Live.MidiMap.MapMode.absolute)
             element.add_value_listener(self.on_knob_input_value, identify_sender = True)
             self.knobs.append(element)
 
     def setup_steps(self):
-        for midi_cc in range(self.steps_offset_cc, self.steps_offset_cc + 16):
-            element = ConfigurableButtonElement(True, MIDI_CC_TYPE, self.midi_channel - 1, midi_cc)
-            element.set_on_off_values(self.led_on, self.led_off) # FIXME: this is currently not supported on BSP
+        for midi_cc in range(STEPS_OFFSET_CC, STEPS_OFFSET_CC + 16):
+            element = ConfigurableButtonElement(True, MIDI_CC_TYPE, MIDI_CHANNEL - 1, midi_cc)
             element.add_value_listener(self.on_step_input_value, identify_sender = True)
             self.steps.append(element)
 
     def setup_pads(self):
-        for midi_note in range(self.pads_offset_note, self.pads_offset_note + 16):
-            element = ConfigurableButtonElement(True, MIDI_NOTE_TYPE, self.midi_channel - 1, midi_note)
-            element.set_on_off_values(self.led_on, self.led_off) # FIXME: this is currently not supported on BSP
+        for midi_note in range(PADS_OFFSET_NOTE, PADS_OFFSET_NOTE + 16):
+            element = ConfigurableButtonElement(True, MIDI_NOTE_TYPE, MIDI_CHANNEL - 1, midi_note)
             element.add_value_listener(self.on_pad_input_value, identify_sender = True)
             self.pads.append(element)
 
@@ -82,7 +78,7 @@ class BeatStepImpro(ControlSurface):
 
     def reset_knob_values_sysex(self):
         for position in range(0, 16):
-            self.set_knob_value_sysex(position, 0)
+            self.set_knob_value_sysex(position, 10)
 
     def set_knob_value_sysex(self, position: int, value: int):
         assert position >= 0 and position <= 15, "knob position must be between 0 and 15"
