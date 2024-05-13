@@ -1,10 +1,10 @@
-import Live # type: ignore
-from _Framework.ControlSurface import ControlSurface # type: ignore
-from _Framework.InputControlElement import MIDI_CC_TYPE, MIDI_NOTE_TYPE # type: ignore
-from _Framework.EncoderElement import EncoderElement # type: ignore
-from Launchpad.ConfigurableButtonElement import ConfigurableButtonElement # type: ignore
-import time
+import Live
+from _Framework.ControlSurface import ControlSurface
+from _Framework.InputControlElement import MIDI_CC_TYPE, MIDI_NOTE_TYPE
+from _Framework.EncoderElement import EncoderElement
+from _Framework.ButtonElement import ButtonElement
 from typing import Callable, List
+import time
 from .utils import rescale
 
 ### Config ###
@@ -22,8 +22,8 @@ TRACK_NAMES = ["Sequencer 1", "Sequencer 2", "Drum"]
 class BeatStep_Impro(ControlSurface):
     ### Control Inputs Setup ###
     knobs: List[EncoderElement]
-    steps: List[ConfigurableButtonElement]
-    pads: List[ConfigurableButtonElement]
+    steps: List[ButtonElement]
+    pads: List[ButtonElement]
     ### Tracks ###
     _tracks: List[Live.Track.Track]
 
@@ -74,13 +74,13 @@ class BeatStep_Impro(ControlSurface):
 
     def _setup_control_steps(self):
         for midi_cc in STEPS_MIDI_CC_MAP:
-            element = ConfigurableButtonElement(True, MIDI_CC_TYPE, MIDI_CHANNEL - 1, midi_cc)
+            element = ButtonElement(True, MIDI_CC_TYPE, MIDI_CHANNEL - 1, midi_cc)
             element.add_value_listener(self._on_control_step_value, identify_sender = True)
             self.steps.append(element)
 
     def _setup_control_pads(self):
         for midi_note in PADS_MIDI_NOTE_MAP:
-            element = ConfigurableButtonElement(True, MIDI_NOTE_TYPE, MIDI_CHANNEL - 1, midi_note)
+            element = ButtonElement(True, MIDI_NOTE_TYPE, MIDI_CHANNEL - 1, midi_note)
             element.add_value_listener(self._on_control_pad_value, identify_sender = True)
             self.pads.append(element)
 
@@ -90,13 +90,13 @@ class BeatStep_Impro(ControlSurface):
         """
         self.log_message(f"Received control knob input {value} from {sender.message_identifier()}")
 
-    def _on_control_step_value(self, value: int, sender: ConfigurableButtonElement):
+    def _on_control_step_value(self, value: int, sender: ButtonElement):
         """
         NOTE: Just for the debugging purposes.
         """
         self.log_message(f"Received control step input {value} from {sender.message_identifier()}")
 
-    def _on_control_pad_value(self, value: int, sender: ConfigurableButtonElement):
+    def _on_control_pad_value(self, value: int, sender: ButtonElement):
         """
         NOTE: Just for the debugging purposes.
         """
@@ -119,6 +119,7 @@ class BeatStep_Impro(ControlSurface):
 
     def set_knob_value_sysex(self, index: int, value: int):
         """
+        TODO: move to custom EncoderElement class in future
         FIXME: seems to not work anymore
         """
         assert index >= 0 and index <= 15, "Knob index must be between 0 and 15."
