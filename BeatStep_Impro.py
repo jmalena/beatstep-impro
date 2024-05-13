@@ -1,6 +1,6 @@
 import Live
 from _Framework.ControlSurface import ControlSurface
-from _Framework.InputControlElement import MIDI_CC_TYPE, MIDI_NOTE_TYPE
+from _Framework.InputControlElement import MIDI_CC_TYPE
 from _Framework.EncoderElement import EncoderElement
 from _Framework.ButtonElement import ButtonElement
 from typing import Callable, List
@@ -13,11 +13,11 @@ from .utils import rescale
 MIDI_CHANNEL = 16
 KNOBS_MIDI_CC_MAP = range(1, 1 + 16)
 STEPS_MIDI_CC_MAP = range(21, 21 + 16)
-PADS_MIDI_NOTE_MAP = range(36, 36 + 16)
+PADS_MIDI_CC_MAP = range(36, 36 + 16)
 
 ##### Tracks config #####
 GROUP_NAME = "BeatStep Impro"
-TRACK_NAMES = ["Sequencer 1", "Sequencer 2", "Drum"]
+TRACK_NAMES = ["Sequencer 1", "Sequencer 2", "Drum", "FX"]
 
 class BeatStep_Impro(ControlSurface):
     ### Control Inputs Setup ###
@@ -44,7 +44,7 @@ class BeatStep_Impro(ControlSurface):
             self.setup_control_inputs()
 
             ### Instruments Mapping ###
-            # _ = self.add_parameter_control_plugin(self._tracks[0], self.knobs[0], "Instrument Rack", "Instrument")
+            _ = self.add_parameter_control_plugin(self.knobs[0], self._tracks[0], "Instrument Rack", "Instrument")
             _ = self.add_parameter_control_plugin(self.knobs[1], self._tracks[1], "Instrument Rack", "Instrument")
             _ = self.add_parameter_control_plugin(self.knobs[2], self._tracks[2], "Instrument Rack", "Instrument")
 
@@ -54,8 +54,34 @@ class BeatStep_Impro(ControlSurface):
             _ = self.add_mixer_control_plugin(self.knobs[5], self._tracks[2])
 
             ### Sequencer 2 Mapping ###
-            _ = self.add_parameter_control_plugin(self.knobs[8], self._tracks[1], "Instrument Rack", "Cutoff")
-            _ = self.add_parameter_control_plugin(self.knobs[9], self._tracks[1], "Instrument Rack", "Resonance")
+            seq1_active = lambda: self.steps[0].is_pressed()
+            _ = self.add_parameter_control_plugin(self.knobs[8], self._tracks[0], "Instrument Rack", "Cutoff", cond=seq1_active)
+            _ = self.add_parameter_control_plugin(self.knobs[9], self._tracks[0], "Instrument Rack", "Resonance", cond=seq1_active)
+            ### Sequencer 2 Mapping ###
+            seq2_active = lambda: not self.steps[0].is_pressed()
+            _ = self.add_parameter_control_plugin(self.knobs[8], self._tracks[1], "Instrument Rack", "Cutoff", cond=seq2_active)
+            _ = self.add_parameter_control_plugin(self.knobs[9], self._tracks[1], "Instrument Rack", "Resonance", cond=seq2_active)
+            ### Drum Mapping ###
+            # TODO
+
+            ### FX Mapping ###
+            fx_active = lambda pad: lambda: pad.is_pressed()
+
+            ##### EQ Mapping #####
+            _ = self.add_parameter_control_plugin(self.knobs[14], self._tracks[3], "Audio Effect Rack", "EQ LP", cond=fx_active(self.pads[13]))
+            _ = self.add_parameter_control_plugin(self.knobs[15], self._tracks[3], "Audio Effect Rack", "EQ HP", cond=fx_active(self.pads[13]))
+
+            ##### Compressor Mapping #####
+            # TODO
+
+            ##### Reverb Mapping #####
+            _ = self.add_parameter_control_plugin(self.knobs[14], self._tracks[3], "Audio Effect Rack", "Reverb Level", cond=fx_active(self.pads[14]))
+            _ = self.add_parameter_control_plugin(self.knobs[15], self._tracks[3], "Audio Effect Rack", "Reverb Feedback", cond=fx_active(self.pads[14]))
+
+            ##### Delay Mapping #####
+            _ = self.add_parameter_control_plugin(self.knobs[14], self._tracks[3], "Audio Effect Rack", "Delay Level", cond=fx_active(self.pads[6]))
+            _ = self.add_parameter_control_plugin(self.knobs[15], self._tracks[3], "Audio Effect Rack", "Delay Feedback", cond=fx_active(self.pads[6]))
+
 
     ################################################################################
     ## Control Inputs Setup
@@ -79,8 +105,8 @@ class BeatStep_Impro(ControlSurface):
             self.steps.append(element)
 
     def _setup_control_pads(self):
-        for midi_note in PADS_MIDI_NOTE_MAP:
-            element = ButtonElement(True, MIDI_NOTE_TYPE, MIDI_CHANNEL - 1, midi_note)
+        for midi_cc in PADS_MIDI_CC_MAP:
+            element = ButtonElement(True, MIDI_CC_TYPE, MIDI_CHANNEL - 1, midi_cc)
             element.add_value_listener(self._on_control_pad_value, identify_sender = True)
             self.pads.append(element)
 
@@ -138,15 +164,16 @@ class BeatStep_Impro(ControlSurface):
     ################################################################################
     #### Parameter Control Plugin
     ################################################################################
-    def add_parameter_control_plugin(self, knob: EncoderElement, track: Live.Track.Track, device_name: str, parameter_name: str) -> Callable[[], None]:
+    def add_parameter_control_plugin(self, knob: EncoderElement, track: Live.Track.Track, device_name: str, parameter_name: str, cond: Callable[[], bool] = lambda: True) -> Callable[[], None]:
         param = self._find_track_parameter(track, device_name, parameter_name)
 
         if not param:
-            self.log_warning(f"Parameter {parameter_name} for {track.name} track's wasn't found within the {device_name} device")
+            self.log_warning(f"Parameter \"{parameter_name}\" for track \"{track.name}\" wasn't found in the device \"{device_name}\"")
             return lambda: None
 
         def on_knob_value_change(value: int):
-            param.value = value
+            if cond():
+                param.value = value
 
         knob.add_value_listener(on_knob_value_change)
         return lambda: knob.remove_value_listener(on_knob_value_change)
