@@ -4,7 +4,7 @@ from _Framework.InputControlElement import MIDI_CC_TYPE, MIDI_NOTE_TYPE # type: 
 from _Framework.EncoderElement import EncoderElement # type: ignore
 from Launchpad.ConfigurableButtonElement import ConfigurableButtonElement # type: ignore
 import time
-from typing import List
+from typing import Callable, List
 from .utils import rescale
 
 ### Config ###
@@ -38,15 +38,24 @@ class BeatStep_Impro(ControlSurface):
             self._tracks = [None] * len(TRACK_NAMES)
 
             if not self.find_tracks():
-                self.log_message(f"Either mandatory group {GROUP_NAME} is missing or any of it's tracks ({TRACK_NAMES}).")
+                self.log_warning(f"Either mandatory group {GROUP_NAME} is missing or any of it's tracks ({TRACK_NAMES}).")
                 # FIXME: exit somehow here
 
             self.setup_control_inputs()
 
-            ##### Plugins #####
-            _ = self.add_mixer_plugin(self._tracks[0], self.knobs[3])
-            _ = self.add_mixer_plugin(self._tracks[1], self.knobs[4])
-            _ = self.add_mixer_plugin(self._tracks[2], self.knobs[5])
+            ### Instruments Mapping ###
+            # _ = self.add_parameter_control_plugin(self._tracks[0], self.knobs[0], "Instrument Rack", "Instrument")
+            _ = self.add_parameter_control_plugin(self.knobs[1], self._tracks[1], "Instrument Rack", "Instrument")
+            _ = self.add_parameter_control_plugin(self.knobs[2], self._tracks[2], "Instrument Rack", "Instrument")
+
+            ### Mixer Mapping ###
+            _ = self.add_mixer_control_plugin(self.knobs[3], self._tracks[0])
+            _ = self.add_mixer_control_plugin(self.knobs[4], self._tracks[1])
+            _ = self.add_mixer_control_plugin(self.knobs[5], self._tracks[2])
+
+            ### Sequencer 2 Mapping ###
+            _ = self.add_parameter_control_plugin(self.knobs[8], self._tracks[1], "Instrument Rack", "Cutoff")
+            _ = self.add_parameter_control_plugin(self.knobs[9], self._tracks[1], "Instrument Rack", "Resonance")
 
     ################################################################################
     ## Control Inputs Setup
@@ -75,29 +84,23 @@ class BeatStep_Impro(ControlSurface):
             element.add_value_listener(self._on_control_pad_value, identify_sender = True)
             self.pads.append(element)
 
-    """
-    NOTE: Just for the debugging purposes.
-    """
     def _on_control_knob_value(self, value: int, sender: EncoderElement):
+        """
+        NOTE: Just for the debugging purposes.
+        """
         self.log_message(f"Received control knob input {value} from {sender.message_identifier()}")
-        for listener in self._knob_listeners:
-            listener(value, sender)
 
-    """
-    NOTE: Just for the debugging purposes.
-    """
     def _on_control_step_value(self, value: int, sender: ConfigurableButtonElement):
+        """
+        NOTE: Just for the debugging purposes.
+        """
         self.log_message(f"Received control step input {value} from {sender.message_identifier()}")
-        for listener in self._step_listeners:
-            listener(value, sender)
 
-    """
-    NOTE: Just for the debugging purposes.
-    """
     def _on_control_pad_value(self, value: int, sender: ConfigurableButtonElement):
+        """
+        NOTE: Just for the debugging purposes.
+        """
         self.log_message(f"Received control pad input {value} from {sender.message_identifier()}")
-        for listener in self._pad_listeners:
-            listener(value, sender)
 
     ###############################################################################
     ## Tracks
@@ -114,10 +117,10 @@ class BeatStep_Impro(ControlSurface):
     ## SysEx
     ################################################################################
 
-    """
-    # FIXME: seems to not work anymore
-    """
     def set_knob_value_sysex(self, index: int, value: int):
+        """
+        FIXME: seems to not work anymore
+        """
         assert index >= 0 and index <= 15, "Knob index must be between 0 and 15."
         clamped_value = min(max(value, 0), 127)
         sysex_message = bytes([0xf0, 0x00, 0x20, 0x6b, 0x7f, 0x42, 0x02, 0x00, 0x00, 0x20 + index, clamped_value, 0xf7])
@@ -132,16 +135,53 @@ class BeatStep_Impro(ControlSurface):
         return False
 
     ################################################################################
-    #### Mixer Plugin
+    #### Parameter Control Plugin
+    ################################################################################
+    def add_parameter_control_plugin(self, knob: EncoderElement, track: Live.Track.Track, device_name: str, parameter_name: str) -> Callable[[], None]:
+        param = self._find_track_parameter(track, device_name, parameter_name)
+
+        if not param:
+            self.log_warning(f"Parameter {parameter_name} for {track.name} track's wasn't found within the {device_name} device")
+            return lambda: None
+
+        def on_knob_value_change(value: int):
+            param.value = value
+
+        knob.add_value_listener(on_knob_value_change)
+        return lambda: knob.remove_value_listener(on_knob_value_change)
+
+    def _find_track_parameter(self, track: Live.Track.Track, device_name: str, paramter_name: str) -> Live.DeviceParameter.DeviceParameter:
+        """
+        Returns first occurence of a paramter within a track's device
+        """
+        for device in track.devices:
+            if device.name == device_name:
+                 for parameter in device.parameters:
+                     if parameter.name == paramter_name:
+                         return parameter
+
+        return None
+
+
+    ################################################################################
+    #### Mixer Control Plugin
     ################################################################################
 
-    def add_mixer_plugin(self, track: Live.Track.Track, knob: EncoderElement):
+    def add_mixer_control_plugin(self, knob: EncoderElement, track: Live.Track.Track) -> Callable[[], None]:
         def on_knob_value_change(value: int):
             next_volume = rescale(0, 127, 0.0, 1.0, value)
             track.mixer_device.volume.value = next_volume
 
         knob.add_value_listener(on_knob_value_change)
         return lambda: knob.remove_value_listener(on_knob_value_change)
+
+
+    ################################################################################
+    ## Logging
+    ################################################################################
+
+    def log_warning(self, msg: str):
+        self.log_message(f"[warning] {msg}")
 
     ################################################################################
     ## Release
