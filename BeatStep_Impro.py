@@ -82,6 +82,10 @@ class BeatStep_Impro(ControlSurface):
             _ = self.add_parameter_control_plugin(self.knobs[14], self._tracks[3], "Audio Effect Rack", "Delay Level", cond=fx_active(self.pads[6]))
             _ = self.add_parameter_control_plugin(self.knobs[15], self._tracks[3], "Audio Effect Rack", "Delay Feedback", cond=fx_active(self.pads[6]))
 
+            ### RESET KNOBS ###
+            for index in range(0, 16):
+                self.log_message(f"res1: {self.set_knob_midi_cc_value_sysex(index, 0)}")
+
 
     ################################################################################
     ## Control Inputs Setup
@@ -143,23 +147,34 @@ class BeatStep_Impro(ControlSurface):
     ## SysEx
     ################################################################################
 
-    def set_knob_value_sysex(self, index: int, value: int):
+    def set_knob_midi_cc_sysex(self, index: int, value: int): # FIXME-> bool:
         """
         TODO: move to custom EncoderElement class in future
-        FIXME: seems to not work anymore
         """
         assert index >= 0 and index <= 15, "Knob index must be between 0 and 15."
         clamped_value = min(max(value, 0), 127)
-        sysex_message = bytes([0xf0, 0x00, 0x20, 0x6b, 0x7f, 0x42, 0x02, 0x00, 0x00, 0x20 + index, clamped_value, 0xf7])
-        self._send_midi(sysex_message)
+        sysex_message = tuple([0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x03, 0x20 + index, clamped_value, 0xF7])
+        return self._send_midi(sysex_message, optimized=False)
 
-    def _send_sysex_and_wait(self, sysex_message: bytes, timeout: float = 1.0) -> bool:
-        self._send_midi(sysex_message)
+    def set_knob_midi_cc_value_sysex(self, index: int, value: int): # FIXME-> bool:
+        """
+        TODO: move to custom EncoderElement class in future
+        """
+        assert index >= 0 and index <= 15, "Knob index must be between 0 and 15."
+        clamped_value = min(max(value, 0), 127)
+        sysex_message = tuple([0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x00, 0x20 + index, clamped_value, 0xF7])
+        return self._send_midi(sysex_message, optimized=False)
+
+    def _send_sysex_and_wait(self, sysex_message: bytes, timeout: float = 1.0): # FIXME -> bool:
+        a = self.get_midi_out()
+        self.log_message(f"midi_out {a}")
+        self._send_midi(sysex_message, optimized=False)
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if self._receive_midi(1) is not None:
-                return True
-        return False
+            response = self._receive_midi(1)
+            if response is not None:
+                return response
+        return None
 
     ################################################################################
     #### Parameter Control Plugin
